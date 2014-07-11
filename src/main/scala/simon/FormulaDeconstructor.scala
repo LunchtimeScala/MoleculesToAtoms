@@ -1,5 +1,7 @@
 package scala.simon
 
+import scala.collection.mutable.Stack
+
 /** A tool for deconstructing molecule strings like H2O. 
   *
   * @constructor create a new deconstructor with right and left parentheses.
@@ -12,7 +14,7 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
   private var factor: Int = 1
   private var previousDigit: Option[Int] = None
   private var previousLetter: Option[Char] = None 
-  private var factorBreadcrumbs: List[Int] = List[Int]()
+  private var factorBreadcrumbs: Stack[Int] = Stack[Int]()
   
   /**
    * This method returns a map of the atoms in a molecule string and their counts.
@@ -26,7 +28,7 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
    * @param input The Molecule string
    */
   def parseMolecule(input: String): Map[String,Int] = {
-    val elements: Array[String] = input.toCharArray().foldRight[Array[String]](Array[String]())((c, array) => handleCharacter(c, array))
+    val elements: Array[String] = input.toCharArray().foldRight(Array[String]())((c, array) => handleCharacter(c, array))
     elements.groupBy(e => e).map(g => (g._1, g._2.length))
   } 
   
@@ -35,12 +37,13 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
    * Call the relevant method depending on character type.
    */
   private def handleCharacter(c: Char, atomsArray: Array[String]): Array[String] = {
-    if(c.isDigit) digit(c, atomsArray)
-    else if(rightParentChars.contains(c)) rightParentheses(atomsArray)
-    else if(leftParentChars.contains(c)) leftParentheses(atomsArray)
-    else if(c.isLower) lowerCaseLetter(c, atomsArray)
-    else if(c.isUpper) upperCaseLetter(c, atomsArray)
+    if(c.isDigit) digit(c)
+    else if(rightParentChars.contains(c)) rightParentheses()
+    else if(leftParentChars.contains(c)) leftParentheses()
+    else if(c.isLower) lowerCaseLetter(c)
+    else if(c.isUpper) return upperCaseLetter(c, atomsArray)
     else throw new IllegalArgumentException("The character '" + c + "' is not acceptable.")
+    atomsArray
   }
   
   
@@ -48,10 +51,9 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
    * If the character is a digit then we multiply it against the current factor and store 
    * the new value. We also store the digit in case the next character is a right parentheses.
    */
-  private def digit(c: Char, array: Array[String]): Array[String] = {
+  private def digit(c: Char) = {
     factor = factor * c.asDigit
     previousDigit = Some(c.asDigit)
-    array
   }
   
   
@@ -60,22 +62,19 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
    * factorBreadcrumbs variable. This allows us to reduce the factor appropriately when
    * we encounter a left parentheses.
    */
-  private def rightParentheses(array: Array[String]): Array[String] = {
-    factorBreadcrumbs = factorBreadcrumbs :+ previousDigit.get
+  private def rightParentheses() = {
+    factorBreadcrumbs.push(previousDigit.get)
     previousDigit = None
-    array
   }
   
   
   /*
    * If the character is a left parentheses then we need to reduce the factor variable by the 
    * appropriate amount. We do this by popping the last digit from the factorBreadcrumbs
-   * List and dividing the factor variable by this value.
+   * Stack and dividing the factor variable by this value.
    */
-  private def leftParentheses(array: Array[String]): Array[String] = {
-    factor = factor/factorBreadcrumbs.takeRight(1)(0)
-    factorBreadcrumbs = factorBreadcrumbs.take(factorBreadcrumbs.length - 1)
-    array
+  private def leftParentheses() = {
+    factor = factor/factorBreadcrumbs.pop
   }
   
   
@@ -83,9 +82,8 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
    * If the character is a lower case letter then we just store it as it will be need to be 
    * appended to the end of the next character to make a full atom. e.g. Fe
    */
-  private def lowerCaseLetter(c: Char, array: Array[String]): Array[String] = {
+  private def lowerCaseLetter(c: Char) = {
     previousLetter = Some(c)
-    array
   }
   
   
@@ -98,13 +96,13 @@ class Deconstructor(val leftParentChars: List[Char] = List('{', '[', '('),
    * to this atom and the factor should be reset to the value before the previous 
    * digit. 
    */
-  private def upperCaseLetter(c: Char, array: Array[String]): Array[String] = {
+  private def upperCaseLetter(c: Char, currentAtoms: Array[String]): Array[String] = {
     val atom: String = c.toString + previousLetter.getOrElse("")
     previousLetter = None
-    var returnArray = array ++ Array.fill[String](factor)(atom)
+    val updatedAtoms = currentAtoms ++ Array.fill[String](factor)(atom)
     factor = factor/previousDigit.getOrElse(1)
     previousDigit = None
-    returnArray
+    updatedAtoms
   }
   
 }
